@@ -90,6 +90,10 @@ above to the moment you post it. The second number is the one that is comparable
 across runs: it excludes however long the pull request sat before anything picked
 it up.
 
+Merging is not done until GitHub reports the pull request merged. When the merge call
+fails because the base branch moved or a check was still pending, wait and try again
+until it lands or the reason is something your decision would change.
+
 Set "merged_by_devin" to true if you merged, false otherwise.
 
 If any condition fails, do not approve and do not merge. Post your findings as a regular
