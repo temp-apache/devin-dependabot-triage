@@ -82,8 +82,7 @@ If, and only if, ALL of the following hold, approve the pull request with your s
 as the review body and then merge it:
   - your decision is "{approve}"
   - your confidence is at least {min_confidence}
-  - the Devin Review verdict above is "passed"
-
+{review_gate}
 End the review body with a line reading "Reached <duration> after the pull request
 opened, <duration> after this service saw it.", measured from the two timestamps
 above to the moment you post it. The second number is the one that is comparable
@@ -123,8 +122,17 @@ def build_prompt(
         escalate=Decision.ESCALATE.value,
     )
     if merge_actor == "devin":
+        # "not_required" means the operator turned the review gate off; treating it as a
+        # failed gate would block every merge while looking like a verdict.
+        gate_off = review_status == "not_required"
+        review_gate = "" if gate_off else '  - the Devin Review verdict above is "passed"\n'
         body += _DEVIN_MERGES.format(
-            review_status=review_status,
+            review_gate=review_gate,
+            review_status=(
+                "not required for this repository, so it is not a condition below"
+                if gate_off
+                else review_status
+            ),
             opened_at=opened_at,
             received_at=received_at or "unknown",
             approve=Decision.APPROVE_AND_MERGE.value,

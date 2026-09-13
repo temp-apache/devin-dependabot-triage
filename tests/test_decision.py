@@ -195,6 +195,19 @@ def test_prompt_tells_devin_to_merge_only_when_gated() -> None:
     assert "confidence is at least 0.8" in prompt
 
 
+def test_prompt_drops_the_review_condition_when_it_is_not_required() -> None:
+    prompt = build_prompt(
+        repo=REPO,
+        pr_url="https://github.com/acme/superset/pull/1",
+        pr_title="bump",
+        merge_actor="devin",
+        min_confidence=0.8,
+        review_status="not_required",
+    )
+    assert 'the Devin Review verdict above is "passed"' not in prompt
+    assert "confidence is at least 0.8" in prompt
+
+
 def test_prompt_forbids_acting_when_the_service_merges() -> None:
     prompt = build_prompt(
         repo=REPO,
