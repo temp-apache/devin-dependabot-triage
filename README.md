@@ -147,7 +147,7 @@ Closing and reopening one of those fires the identical webhook path.
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest        # 15 tests, no network
+.venv/bin/python -m pytest        # 18 tests, no network
 .venv/bin/ruff check . && .venv/bin/mypy app scripts
 ```
 

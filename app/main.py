@@ -102,11 +102,15 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
         else "not_required"
     )
 
+    # A dry run must also stop the *session* from acting, not just this service, so the
+    # prompt gets the variant that forbids touching the pull request.
+    merge_actor = "service" if settings.dry_run else settings.merge_actor
+
     prompt = build_prompt(
         repo=settings.target_repo,
         pr_url=pull_request["html_url"],
         pr_title=pull_request["title"],
-        merge_actor=settings.merge_actor,
+        merge_actor=merge_actor,
         min_confidence=settings.min_confidence,
         review_status=review_status,
     )
@@ -133,7 +137,7 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
             )
         return
 
-    if settings.merge_actor == "devin":
+    if merge_actor == "devin":
         logger.info(
             "PR #%s: %s (confidence %.2f), merged_by_devin=%s",
             number,
