@@ -50,12 +50,17 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+#: Reopening is the one manual way to ask for another pass over the same pull request.
+TRIAGE_ACTIONS = frozenset({"opened", "reopened"})
+
+
 def _is_bot_dependency_pr(payload: dict[str, Any], settings: Settings) -> bool:
-    if payload.get("action") != "opened":
+    if payload.get("action") not in TRIAGE_ACTIONS:
         return False
-    sender = (payload.get("sender") or {}).get("login", "")
-    if sender not in settings.bot_senders:
-        logger.info("ignoring pull request from %r", sender)
+    # The author, not the sender: a reopen is sent by whoever clicked the button.
+    author = ((payload.get("pull_request") or {}).get("user") or {}).get("login", "")
+    if author not in settings.bot_senders:
+        logger.info("ignoring pull request from %r", author)
         return False
     repo = (payload.get("repository") or {}).get("full_name")
     if repo != settings.target_repo:

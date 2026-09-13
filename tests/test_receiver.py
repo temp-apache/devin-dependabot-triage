@@ -36,13 +36,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
-def payload(*, sender: str = "dependabot[bot]", action: str = "opened") -> bytes:
+def payload(*, author: str = "dependabot[bot]", action: str = "opened") -> bytes:
     return json.dumps(
         {
             "action": action,
-            "sender": {"login": sender},
+            "sender": {"login": "a-person"},
             "repository": {"full_name": "acme/superset"},
             "pull_request": {
+                "user": {"login": author},
                 "number": 1,
                 "title": "chore(deps): bump js-yaml",
                 "html_url": "https://github.com/acme/superset/pull/1",
@@ -69,7 +70,7 @@ def test_rejects_a_missing_signature(client: TestClient) -> None:
 
 
 def test_ignores_a_human_pull_request(client: TestClient) -> None:
-    body = payload(sender="a-person")
+    body = payload(author="a-person")
     response = client.post(
         "/github/webhook",
         content=body,
@@ -78,7 +79,7 @@ def test_ignores_a_human_pull_request(client: TestClient) -> None:
     assert response.status_code == 204
 
 
-def test_ignores_a_reopened_pull_request_action(client: TestClient) -> None:
+def test_ignores_a_synchronize_pull_request_action(client: TestClient) -> None:
     body = payload(action="synchronize")
     response = client.post(
         "/github/webhook",
@@ -101,6 +102,28 @@ def test_accepts_a_dependabot_pull_request(
     monkeypatch.setattr("app.main.triage", fake_triage)
 
     body = payload()
+    response = client.post(
+        "/github/webhook",
+        content=body,
+        headers={"X-GitHub-Event": "pull_request", "X-Hub-Signature-256": sign(body)},
+    )
+    assert response.status_code == 202
+    assert seen == [1]
+
+
+def test_accepts_a_reopened_dependabot_pull_request(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[int] = []
+
+    async def fake_triage(
+        pull_request: dict[str, Any], settings: Settings, *_: object
+    ) -> None:
+        seen.append(pull_request["number"])
+
+    monkeypatch.setattr("app.main.triage", fake_triage)
+
+    body = payload(action="reopened")
     response = client.post(
         "/github/webhook",
         content=body,
