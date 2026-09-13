@@ -2,7 +2,8 @@
 """Send a correctly signed pull_request webhook at a locally running receiver.
 
 Exercises the full path without GitHub. Pair it with DRY_RUN=true to check the wiring
-before pointing anything real at it.
+before pointing anything real at it. Standard library only, so it runs on any Python
+3.9+ without installing anything.
 
   python scripts/send_test_webhook.py --url http://localhost:8000/github/webhook
 """
@@ -15,8 +16,8 @@ import hmac
 import json
 import os
 import sys
-
-import httpx
+import urllib.error
+import urllib.request
 
 
 def main() -> int:
@@ -51,19 +52,29 @@ def main() -> int:
     body = json.dumps(payload).encode()
     signature = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
-    response = httpx.post(
+    request = urllib.request.Request(
         args.url,
-        content=body,
+        data=body,
         headers={
             "Content-Type": "application/json",
             "X-GitHub-Event": "pull_request",
             "X-GitHub-Delivery": "local-test",
             "X-Hub-Signature-256": signature,
         },
-        timeout=15.0,
+        method="POST",
     )
-    print(f"{response.status_code} {response.text}")
-    return 0 if response.status_code in {202, 204} else 1
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            code = response.status
+            print(f"{code} {response.read().decode()}")
+    except urllib.error.HTTPError as error:
+        code = error.code
+        print(f"{code} {error.read().decode()}")
+    except urllib.error.URLError as error:
+        print(f"could not reach {args.url}: {error.reason}", file=sys.stderr)
+        return 1
+
+    return 0 if code in {202, 204} else 1
 
 
 if __name__ == "__main__":

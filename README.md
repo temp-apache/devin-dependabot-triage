@@ -151,10 +151,11 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/ruff check . && .venv/bin/mypy app scripts
 ```
 
-Send a signed webhook at a locally running receiver without GitHub:
+Send a signed webhook at a locally running receiver without GitHub (standard library
+only, no install needed):
 
 ```bash
-python scripts/send_test_webhook.py --url http://localhost:8000/github/webhook
+GITHUB_WEBHOOK_SECRET=<same as .env> python3 scripts/send_test_webhook.py
 ```
 
 ## Layout
