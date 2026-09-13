@@ -13,61 +13,71 @@ for it anywhere in GitHub's REST surface, and forks do not inherit it from a com
 .github/dependabot.yml. Enable it by hand at
   Settings -> Advanced Security -> Dependabot version updates -> Enable
 
+Standard library only, so it runs under any Python 3.9+ with nothing installed.
+
 Usage:
-  python scripts/setup_repo.py --repo owner/name --webhook-url https://smee.io/abc123
+  GITHUB_TOKEN=... GITHUB_WEBHOOK_SECRET=... \
+    python3 scripts/setup_repo.py --repo owner/name --webhook-url https://smee.io/abc123
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
-
-import httpx
+import urllib.error
+import urllib.request
+from typing import Any
 
 API = "https://api.github.com"
 HEADERS_VERSION = "2022-11-28"
 
 
-def client(token: str) -> httpx.Client:
-    return httpx.Client(
-        base_url=API,
+def call(token: str, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+    request = urllib.request.Request(
+        f"{API}{path}",
+        method=method,
+        data=json.dumps(payload).encode() if payload is not None else None,
         headers={
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": HEADERS_VERSION,
+            "Content-Type": "application/json",
         },
-        timeout=30.0,
     )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        body = response.read()
+    return json.loads(body) if body else None
 
 
-def enable_dependabot_alerts(gh: httpx.Client, repo: str) -> None:
-    gh.put(f"/repos/{repo}/vulnerability-alerts").raise_for_status()
+def enable_dependabot_alerts(token: str, repo: str) -> None:
+    call(token, "PUT", f"/repos/{repo}/vulnerability-alerts")
     print("  dependabot alerts: enabled")
 
 
-def enable_security_updates(gh: httpx.Client, repo: str) -> None:
-    gh.put(f"/repos/{repo}/automated-security-fixes").raise_for_status()
+def enable_security_updates(token: str, repo: str) -> None:
+    call(token, "PUT", f"/repos/{repo}/automated-security-fixes")
     print("  dependabot security updates: enabled")
 
 
-def disable_actions(gh: httpx.Client, repo: str) -> None:
+def disable_actions(token: str, repo: str) -> None:
     """Superset carries 55 workflows; every PR would drag the full matrix along."""
-    gh.put(f"/repos/{repo}/actions/permissions", json={"enabled": False}).raise_for_status()
+    call(token, "PUT", f"/repos/{repo}/actions/permissions", {"enabled": False})
     print("  actions: disabled")
 
 
-def ensure_webhook(gh: httpx.Client, repo: str, url: str, secret: str) -> None:
-    existing = gh.get(f"/repos/{repo}/hooks")
-    existing.raise_for_status()
-    for hook in existing.json():
+def ensure_webhook(token: str, repo: str, url: str, secret: str) -> None:
+    for hook in call(token, "GET", f"/repos/{repo}/hooks") or []:
         if hook.get("config", {}).get("url") == url:
             print(f"  webhook: already present (id {hook['id']})")
             return
 
-    response = gh.post(
+    created = call(
+        token,
+        "POST",
         f"/repos/{repo}/hooks",
-        json={
+        {
             "name": "web",
             "active": True,
             "events": ["pull_request", "pull_request_review"],
@@ -79,8 +89,7 @@ def ensure_webhook(gh: httpx.Client, repo: str, url: str, secret: str) -> None:
             },
         },
     )
-    response.raise_for_status()
-    print(f"  webhook: created (id {response.json()['id']})")
+    print(f"  webhook: created (id {created['id']})")
 
 
 def main() -> int:
@@ -96,11 +105,15 @@ def main() -> int:
         return 1
 
     print(f"configuring {args.repo}")
-    with client(token) as gh:
-        enable_dependabot_alerts(gh, args.repo)
-        enable_security_updates(gh, args.repo)
-        disable_actions(gh, args.repo)
-        ensure_webhook(gh, args.repo, args.webhook_url, secret)
+    try:
+        enable_dependabot_alerts(token, args.repo)
+        enable_security_updates(token, args.repo)
+        disable_actions(token, args.repo)
+        ensure_webhook(token, args.repo, args.webhook_url, secret)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        print(f"\nHTTP {exc.code} from {exc.url}\n{detail}", file=sys.stderr)
+        return 1
 
     print(
         "\nremaining manual step:\n"

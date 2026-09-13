@@ -87,8 +87,10 @@ to show on a slide. Devin doing it is the better watch.
 ```bash
 export GITHUB_TOKEN=ghp_...           # repo + security_events + admin:repo_hook
 export GITHUB_WEBHOOK_SECRET=$(openssl rand -hex 20)
-python scripts/setup_repo.py --repo temp-apache/superset --webhook-url https://smee.io/YOUR_CHANNEL
+python3 scripts/setup_repo.py --repo temp-apache/superset --webhook-url https://smee.io/YOUR_CHANNEL
 ```
+
+Standard library only — nothing to install.
 
 That enables Dependabot alerts and security updates, disables Actions (Superset carries
 55 workflows and every PR would drag the full matrix along), and creates the webhook.
