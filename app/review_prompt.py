@@ -28,10 +28,11 @@ Steps:
 1. Read the diff. Establish which package moves, from which version to which, and
    whether the change is confined to lockfiles or also edits a manifest.
 
-2. Confirm the advisory is real and applies here. Check that the currently pinned
-   version is actually in the affected range and that the proposed version is at or
+2. If the pull request cites a security advisory, confirm it is real and applies here:
+   that the pinned version is in the affected range and the proposed version is at or
    above the first fixed release. An advisory with no fixed release cannot be resolved
-   by a bump, however severe it is.
+   by a bump, however severe it is. Most dependency bumps cite none, and that is not by
+   itself a reason to withhold approval — routine upgrades are the normal case.
 
 3. Check the repository's own constraints, AND THE COMMENTS ON THEM. Look in
    pyproject.toml, requirements/*.in, requirements/*.txt, package.json (including the
@@ -54,11 +55,11 @@ Steps:
 
 Decide:
 
-- "{approve}" only if the advisory applies, the bump resolves it, the repository's own
-  constraints permit it to stick, and you have either verified nothing breaks or
-  established that nothing could.
-- "{decline}" if the bump does not resolve the advisory, cannot take effect, or breaks
-  something. Say precisely what, with evidence.
+- "{approve}" if the repository's own constraints permit the bump to stick and you have
+  either verified nothing breaks or established that nothing could. Where an advisory is
+  cited, it must also apply and be resolved by the bump.
+- "{decline}" if the bump cannot take effect, breaks something, or fails to resolve the
+  advisory it cites. Say precisely what, with evidence.
 - "{escalate}" if the right answer depends on a judgement the maintainers have to make
   (a deliberate trade-off, a pin with a reason you cannot verify, a failure you cannot
   attribute).
