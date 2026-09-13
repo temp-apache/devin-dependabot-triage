@@ -90,9 +90,15 @@ above to the moment you post it. The second number is the one that is comparable
 across runs: it excludes however long the pull request sat before anything picked
 it up.
 
-Merging is not done until GitHub reports the pull request merged. When the merge call
-fails because the base branch moved or a check was still pending, wait and try again
-until it lands or the reason is something your decision would change.
+Merge through the GitHub REST API, which is what this repository is configured for:
+
+  PUT /repos/{repo}/pulls/<number>/merge  with {{"merge_method": "squash"}}
+
+Merging is not done until GitHub reports the pull request merged. When the call fails
+because the base branch moved or a check was still pending, wait and try again until it
+lands or the reason is something your decision would change. If a built-in merge helper
+refuses to touch the default branch, that is a limit of the helper rather than of this
+task: make the API call instead.
 
 Set "merged_by_devin" to true if you merged, false otherwise.
 
@@ -141,6 +147,7 @@ def build_prompt(
         gate_off = review_status == "not_required"
         review_gate = "" if gate_off else '  - the Devin Review verdict above is "passed"\n'
         body += _DEVIN_MERGES.format(
+            repo=repo,
             review_gate=review_gate,
             review_status=(
                 "not required for this repository, so it is not a condition below"
