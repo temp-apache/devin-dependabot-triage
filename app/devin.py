@@ -71,6 +71,15 @@ class DevinClient:
         that waits for a verdict waits forever unless something requests one.
         """
         response = await self._client.post(self._reviews_path, json={"pr_url": pr_url})
+        if response.is_error:
+            # The status alone does not say whether the key lacks the scope, the org id
+            # is wrong, or the repository is not connected. The body does.
+            logger.error(
+                "Devin Review request for %s failed: HTTP %s %s",
+                pr_url,
+                response.status_code,
+                response.text[:500],
+            )
         response.raise_for_status()
         return str(response.json().get("status", "pending"))
 
