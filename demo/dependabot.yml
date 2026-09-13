@@ -1,0 +1,43 @@
+# Curated Dependabot config for the demo fork of apache/superset.
+#
+# Copy this over the fork's .github/dependabot.yml and commit it BEFORE enabling
+# Dependabot version updates. Superset's own config covers nine ecosystems with limits
+# up to 30, which opens thirty-odd pull requests on the first run. This opens three,
+# each chosen because the right answer is not the one a version rule would give:
+#
+#   paramiko 3.5.1 -> 5.0.0   the repo caps it below 4.0 and says why: sshtunnel still
+#                             calls DSSKey, which 4.0 removed. Devin declines.
+#   typescript 5.4.5 -> 7.0.2 permitted by the manifest, but the lockfile's peer ranges
+#                             cap it below 6.1 and CI installs with a plain `npm ci`,
+#                             so every frontend job would fail at install. Devin declines.
+#   react-window 2.3.0 -> 2.3.1  a real patch bump that nothing objects to, verified
+#                             rather than waved through. Devin approves and merges.
+#
+# No `cooldown` here: it hides releases younger than a week, which on demo day means
+# the pull request you are waiting for silently never opens.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 2
+    versioning-strategy: increase
+    labels:
+      - pip
+      - dependabot
+    allow:
+      - dependency-name: "paramiko"
+
+  - package-ecosystem: "npm"
+    directory: "/superset-frontend/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 3
+    versioning-strategy: increase
+    labels:
+      - npm
+      - dependabot
+    allow:
+      - dependency-name: "typescript"
+      - dependency-name: "react-window"
