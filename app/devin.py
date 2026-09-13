@@ -68,7 +68,9 @@ class DevinClient:
         deadline = time.monotonic() + timeout_seconds
         while True:
             session = await self.get_session(session_id)
-            status = session.get("status_enum")
+            # status_enum is nullable and is absent while a session is starting up;
+            # status always carries something human-readable.
+            status = session.get("status_enum") or session.get("status") or "unknown"
 
             if status in TERMINAL_STATUSES:
                 output = session.get("structured_output")
