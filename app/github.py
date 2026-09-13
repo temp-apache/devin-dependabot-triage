@@ -104,11 +104,22 @@ class GitHubClient:
         return bool(response.json().get("merged"))
 
 
+def escalation_note(decision: Decision, channel: str) -> str:
+    """Placeholder for the Slack hand-off, worded so it cannot read as a real one."""
+    if not channel or decision is Decision.APPROVE_AND_MERGE:
+        return ""
+    return (
+        f"> **Escalation:** this would notify `{channel}` in Slack for human review "
+        "_(mocked — no Slack connection in this demo)_."
+    )
+
+
 def render_comment(
     result: ReviewResult,
     session_url: str,
     elapsed: timedelta | None = None,
     handled_in: timedelta | None = None,
+    escalation_channel: str = "",
 ) -> str:
     lines = [f"**{result.decision.value}** (confidence {result.confidence:.2f})", ""]
     lines.append(result.summary)
@@ -123,6 +134,9 @@ def render_comment(
         lines += ["", f"{timing}."]
     elif handled_in is not None:
         lines += ["", f"Reached {format_elapsed(handled_in)} after this service saw it."]
+    note = escalation_note(result.decision, escalation_channel)
+    if note:
+        lines += ["", note]
     lines += ["", f"[Written by Devin]({session_url})"]
     return "\n".join(lines)
 
@@ -147,11 +161,12 @@ async def apply_decision(
     min_confidence: float,
     require_devin_review: bool,
     dry_run: bool,
+    escalation_channel: str = "",
     elapsed: timedelta | None = None,
     handled_in: timedelta | None = None,
 ) -> str:
     """Execute a decision. Used when the service, not Devin, owns the merge."""
-    body = render_comment(result, session_url, elapsed, handled_in)
+    body = render_comment(result, session_url, elapsed, handled_in, escalation_channel)
 
     if dry_run:
         logger.info("dry run, would post on #%s:\n%s", pull_number, body)

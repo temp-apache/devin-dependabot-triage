@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         description="'devin' lets the session approve and merge; 'service' does it here",
     )
     require_devin_review: bool = True
+    escalation_channel: str = Field(
+        default="",
+        description="Slack channel named in declines and escalations; no message is sent",
+    )
     min_confidence: float = 0.8
     dry_run: bool = False
 

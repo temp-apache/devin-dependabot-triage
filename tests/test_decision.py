@@ -195,6 +195,35 @@ def test_prompt_tells_devin_to_merge_only_when_gated() -> None:
     assert "confidence is at least 0.8" in prompt
 
 
+def test_comment_names_the_escalation_channel_only_when_it_does_not_merge() -> None:
+    declined = render_comment(
+        result(Decision.DECLINE), SESSION, escalation_channel="#engineering"
+    )
+    approved = render_comment(
+        result(Decision.APPROVE_AND_MERGE), SESSION, escalation_channel="#engineering"
+    )
+    assert "would notify `#engineering` in Slack" in declined
+    assert "mocked" in declined
+    assert "#engineering" not in approved
+
+
+def test_comment_omits_the_escalation_line_without_a_channel() -> None:
+    assert "Slack" not in render_comment(result(Decision.DECLINE), SESSION)
+
+
+def test_prompt_asks_for_the_escalation_line_when_a_channel_is_set() -> None:
+    prompt = build_prompt(
+        repo=REPO,
+        pr_url="https://github.com/acme/superset/pull/1",
+        pr_title="bump",
+        merge_actor="devin",
+        min_confidence=0.8,
+        review_status="not_required",
+        escalation_channel="#engineering",
+    )
+    assert "would notify `#engineering` in Slack" in prompt
+
+
 def test_prompt_drops_the_review_condition_when_it_is_not_required() -> None:
     prompt = build_prompt(
         repo=REPO,

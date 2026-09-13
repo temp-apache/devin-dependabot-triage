@@ -93,6 +93,14 @@ Set "merged_by_devin" to true if you merged, false otherwise.
 
 If any condition fails, do not approve and do not merge. Post your findings as a regular
 pull request comment instead, and say plainly which condition stopped you.
+{escalation}"""
+
+_ESCALATION = """
+When you do not merge, end the comment with this line exactly, which stands in for a
+notification that is not wired up here:
+
+> **Escalation:** this would notify `{channel}` in Slack for human review _(mocked — no
+> Slack connection in this demo)_.
 """
 
 _SERVICE_MERGES = """\
@@ -110,6 +118,7 @@ def build_prompt(
     merge_actor: str,
     min_confidence: float,
     review_status: str,
+    escalation_channel: str = "",
     opened_at: str = "",
     received_at: str = "",
 ) -> str:
@@ -137,6 +146,9 @@ def build_prompt(
             received_at=received_at or "unknown",
             approve=Decision.APPROVE_AND_MERGE.value,
             min_confidence=min_confidence,
+            escalation=(
+                _ESCALATION.format(channel=escalation_channel) if escalation_channel else ""
+            ),
         )
     else:
         body += _SERVICE_MERGES

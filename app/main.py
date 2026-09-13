@@ -177,6 +177,7 @@ async def triage(
         merge_actor=merge_actor,
         min_confidence=settings.min_confidence,
         review_status=review_status,
+        escalation_channel=settings.escalation_channel,
         opened_at=opened_at.isoformat() if opened_at else "unknown",
         received_at=received_at.isoformat(),
     )
@@ -230,6 +231,7 @@ async def triage(
         min_confidence=settings.min_confidence,
         require_devin_review=settings.require_devin_review,
         dry_run=settings.dry_run,
+        escalation_channel=settings.escalation_channel,
         elapsed=elapsed,
         handled_in=handled_in,
     )
