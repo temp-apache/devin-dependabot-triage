@@ -33,7 +33,7 @@ updates:
     directory: "/superset-frontend/"
     schedule:
       interval: "daily"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     versioning-strategy: increase
     labels:
       - npm
@@ -41,3 +41,9 @@ updates:
     allow:
       - dependency-name: "typescript"
       - dependency-name: "react-window"
+      # Spare approve-case candidates, so the run does not depend on a single
+      # mergeable bump being available on the day.
+      - dependency-name: "@testing-library/user-event"
+      - dependency-name: "@swc/core"
+      - dependency-name: "@swc/plugin-emotion"
+      - dependency-name: "@swc/plugin-transform-imports"
