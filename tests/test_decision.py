@@ -100,6 +100,14 @@ async def test_holds_when_devin_review_has_not_run(github: GitHubClient) -> None
 
 
 @respx.mock
+async def test_an_unreadable_verdict_fails_closed(github: GitHubClient) -> None:
+    respx.get(f"https://api.github.com/repos/{REPO}/pulls/1/reviews").mock(
+        httpx.Response(404, json={"message": "Not Found"})
+    )
+    assert await github.devin_review_status(1) == "absent"
+
+
+@respx.mock
 async def test_a_decline_only_comments(github: GitHubClient) -> None:
     comment = respx.post(f"https://api.github.com/repos/{REPO}/issues/1/comments").mock(
         httpx.Response(201, json={})

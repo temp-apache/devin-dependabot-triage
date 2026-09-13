@@ -48,12 +48,22 @@ class GitHubClient:
         Returns ``passed``, ``changes_requested``, or ``absent``. Devin Review surfaces
         as a pull request review from a Devin-owned account; a ``COMMENTED`` review with
         no requested changes is treated as passing.
+
+        Anything that stops the verdict being read — an unreachable pull request, a
+        token without access — reports ``absent``, which fails the merge gate closed.
         """
         response = await self._client.get(
             f"/repos/{self.repo}/pulls/{pull_number}/reviews",
             params={"per_page": 100},
         )
-        response.raise_for_status()
+        if response.is_error:
+            logger.warning(
+                "could not read reviews on %s#%s: HTTP %s",
+                self.repo,
+                pull_number,
+                response.status_code,
+            )
+            return "absent"
         reviews = [
             review
             for review in response.json()
