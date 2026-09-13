@@ -16,13 +16,24 @@ logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = {"finished", "expired", "blocked"}
 
+#: Devin Review states that mean the worker has stopped, successfully or not.
+TERMINAL_REVIEW_STATUSES = {"completed", "errored", "cancelled", "skipped"}
+
 
 class DevinError(RuntimeError):
     pass
 
 
 class DevinClient:
-    def __init__(self, api_key: str, base_url: str = "https://api.devin.ai") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.devin.ai",
+        org_id: str = "",
+    ) -> None:
+        self._reviews_path = (
+            f"/v3/organizations/{org_id}/pr-reviews" if org_id else "/v3/enterprise/pr-reviews"
+        )
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -52,6 +63,43 @@ class DevinClient:
         response = await self._client.get(f"/v1/sessions/{session_id}")
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
+
+    async def trigger_review(self, pr_url: str) -> str:
+        """Ask for a Devin Review of ``pr_url`` and return its initial status.
+
+        Devin Review does not run by itself on bot-authored pull requests, so a gate
+        that waits for a verdict waits forever unless something requests one.
+        """
+        response = await self._client.post(self._reviews_path, json={"pr_url": pr_url})
+        response.raise_for_status()
+        return str(response.json().get("status", "pending"))
+
+    async def review_status(self, pr_url: str) -> str:
+        """Status of the latest review, or ``missing`` when none has been recorded."""
+        response = await self._client.get(self._reviews_path, params={"pr_url": pr_url})
+        if response.status_code == 404:
+            return "missing"
+        response.raise_for_status()
+        return str(response.json().get("status", "missing"))
+
+    async def wait_for_review(
+        self,
+        pr_url: str,
+        *,
+        interval_seconds: float,
+        timeout_seconds: float,
+    ) -> str:
+        """Trigger a review and poll until the worker stops. Returns the final status."""
+        status = await self.trigger_review(pr_url)
+        deadline = time.monotonic() + timeout_seconds
+        while status not in TERMINAL_REVIEW_STATUSES:
+            if time.monotonic() >= deadline:
+                logger.warning("Devin Review on %s still '%s', giving up", pr_url, status)
+                return status
+            await asyncio.sleep(interval_seconds)
+            status = await self.review_status(pr_url)
+            logger.info("Devin Review on %s is %s", pr_url, status)
+        return status
 
     async def wait_for_result(
         self,

@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, Request, Response, status
 
 from app.config import Settings, get_settings
@@ -32,7 +33,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    app.state.devin = DevinClient(settings.devin_api_key, settings.devin_api_base)
+    app.state.devin = DevinClient(
+        settings.devin_api_key, settings.devin_api_base, settings.devin_org_id
+    )
     app.state.github = GitHubClient(settings.github_token, settings.target_repo)
     yield
     await app.state.devin.aclose()
@@ -85,14 +88,18 @@ async def webhook(
     if not _is_bot_dependency_pr(payload, settings):
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    background.add_task(_triage_guarded, payload["pull_request"], settings)
+    background.add_task(
+        _triage_guarded, payload["pull_request"], settings, datetime.now(timezone.utc)
+    )
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
-async def _triage_guarded(pull_request: dict[str, Any], settings: Settings) -> None:
+async def _triage_guarded(
+    pull_request: dict[str, Any], settings: Settings, received_at: datetime
+) -> None:
     """A background task that raises is logged nowhere useful, so catch it here."""
     try:
-        await triage(pull_request, settings)
+        await triage(pull_request, settings, received_at)
     except Exception:
         logger.exception("triage failed for PR #%s", pull_request.get("number"))
 
@@ -107,14 +114,54 @@ def _opened_at(pull_request: dict[str, Any]) -> datetime | None:
         return None
 
 
-async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
+async def _devin_review_verdict(
+    devin: DevinClient,
+    github: GitHubClient,
+    pr_url: str,
+    number: int,
+    settings: Settings,
+) -> str:
+    """The Devin Review verdict, requesting a review first if the PR has none.
+
+    Devin Review runs on human pull requests, not bot ones, so a gate that only reads
+    an existing verdict blocks every Dependabot PR forever. Requesting one turns the
+    gate into a real check rather than a switch that has to be turned off.
+    """
+    verdict = await github.devin_review_status(number)
+    if verdict != "absent" or not settings.trigger_devin_review:
+        return verdict
+
+    logger.info("no Devin Review on #%s, requesting one", number)
+    try:
+        status = await devin.wait_for_review(
+            pr_url,
+            interval_seconds=settings.review_poll_interval_seconds,
+            timeout_seconds=settings.review_timeout_seconds,
+        )
+    except httpx.HTTPError:
+        logger.exception("could not request a Devin Review for #%s", number)
+        return "absent"
+
+    if status != "completed":
+        logger.warning("Devin Review on #%s ended as '%s'", number, status)
+        return "absent"
+    return await github.devin_review_status(number)
+
+
+async def triage(
+    pull_request: dict[str, Any],
+    settings: Settings,
+    received_at: datetime | None = None,
+) -> None:
     number = pull_request["number"]
+    pr_url = pull_request["html_url"]
     opened_at = _opened_at(pull_request)
+    received_at = received_at or datetime.now(timezone.utc)
     devin: DevinClient = app.state.devin
     github: GitHubClient = app.state.github
 
     review_status = (
-        await github.devin_review_status(number)
+        await _devin_review_verdict(devin, github, pr_url, number, settings)
         if settings.require_devin_review
         else "not_required"
     )
@@ -125,12 +172,13 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
 
     prompt = build_prompt(
         repo=settings.target_repo,
-        pr_url=pull_request["html_url"],
+        pr_url=pr_url,
         pr_title=pull_request["title"],
         merge_actor=merge_actor,
         min_confidence=settings.min_confidence,
         review_status=review_status,
         opened_at=opened_at.isoformat() if opened_at else "unknown",
+        received_at=received_at.isoformat(),
     )
 
     session = await devin.create_session(
@@ -155,16 +203,20 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
             )
         return
 
-    elapsed = datetime.now(timezone.utc) - opened_at if opened_at is not None else None
+    now = datetime.now(timezone.utc)
+    elapsed = now - opened_at if opened_at is not None else None
+    handled_in = now - received_at
 
     if merge_actor == "devin":
         logger.info(
-            "PR #%s: %s (confidence %.2f), merged_by_devin=%s, %s since it opened",
+            "PR #%s: %s (confidence %.2f), merged_by_devin=%s, %s since it opened, "
+            "%s since the webhook arrived",
             number,
             result.decision.value,
             result.confidence,
             result.merged_by_devin,
             format_elapsed(elapsed) if elapsed else "unknown time",
+            format_elapsed(handled_in),
         )
         if result.merged_by_devin and not await github.is_merged(number):
             logger.warning("PR #%s reported merged but is still open", number)
@@ -179,11 +231,13 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
         require_devin_review=settings.require_devin_review,
         dry_run=settings.dry_run,
         elapsed=elapsed,
+        handled_in=handled_in,
     )
     logger.info(
-        "PR #%s: %s -> %s in %s",
+        "PR #%s: %s -> %s, %s since it opened, %s since the webhook arrived",
         number,
         result.decision.value,
         outcome,
         format_elapsed(elapsed) if elapsed else "unknown time",
+        format_elapsed(handled_in),
     )

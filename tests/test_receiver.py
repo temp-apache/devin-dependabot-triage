@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -92,7 +93,9 @@ def test_accepts_a_dependabot_pull_request(
 ) -> None:
     seen: list[int] = []
 
-    async def fake_triage(pull_request: dict, settings: Settings) -> None:
+    async def fake_triage(
+        pull_request: dict[str, Any], settings: Settings, *_: object
+    ) -> None:
         seen.append(pull_request["number"])
 
     monkeypatch.setattr("app.main.triage", fake_triage)

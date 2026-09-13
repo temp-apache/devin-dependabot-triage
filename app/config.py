@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     min_confidence: float = 0.8
     dry_run: bool = False
 
+    devin_org_id: str = Field(
+        default="",
+        description="org-<uuid>; when empty the enterprise-scoped review route is used",
+    )
+    trigger_devin_review: bool = Field(
+        default=True,
+        description="request a Devin Review when a bot PR has none, rather than fail the gate",
+    )
+    review_poll_interval_seconds: float = 10.0
+    review_timeout_seconds: float = 600.0
+
     poll_interval_seconds: float = 15.0
     poll_timeout_seconds: float = 2700.0
 

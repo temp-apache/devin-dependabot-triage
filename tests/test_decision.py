@@ -168,6 +168,20 @@ def test_the_comment_states_how_long_the_pr_waited() -> None:
     assert "Reached 4m 12s after the pull request opened." in body
 
 
+def test_the_comment_separates_queue_time_from_turnaround() -> None:
+    """The PR may have sat for hours; only the second number measures Devin."""
+    body = render_comment(
+        result(Decision.APPROVE_AND_MERGE),
+        SESSION,
+        timedelta(hours=7),
+        timedelta(seconds=252),
+    )
+    assert (
+        "Reached 7h 0m after the pull request opened, 4m 12s after this service saw it."
+        in body
+    )
+
+
 def test_prompt_tells_devin_to_merge_only_when_gated() -> None:
     prompt = build_prompt(
         repo=REPO,

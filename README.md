@@ -50,6 +50,7 @@ sequenceDiagram
   RX->>RX: verify signature, sender is dependabot[bot]
   RX->>GH: 202 Accepted
   RX->>GH: read Devin Review verdict on the PR
+  RX->>DV: no verdict yet -> request a Devin Review, wait for it
   RX->>DV: create session (prompt + output schema)
   DV->>GH: read diff, manifests, comments; run tests
   alt approve_and_merge AND confidence >= 0.8 AND Devin Review passed
@@ -75,6 +76,15 @@ Otherwise it comments and says which condition stopped it. Set `MERGE_ACTOR=serv
 move the approve/merge into this service instead — same gate, enforced in code
 (<code>app/github.py</code>, `apply_decision`), which is easier to unit test and easier
 to show on a slide. Devin doing it is the better watch.
+
+Devin Review does not run by itself on bot-authored pull requests, so a gate that only
+reads an existing verdict blocks every Dependabot PR. The service requests one
+(`POST /v3/organizations/{org}/pr-reviews`), waits for it to complete, then reads the
+verdict — set `DEVIN_ORG_ID`, or leave it empty on an enterprise account to use the
+enterprise-scoped route. `TRIGGER_DEVIN_REVIEW=false` restores the read-only behaviour.
+
+A review that errors, is cancelled, or does not finish within `REVIEW_TIMEOUT_SECONDS`
+leaves the verdict `absent`, which fails the gate closed.
 
 > Devin Review only runs in repositories connected to your Devin organisation. If the
 > target repository is not connected, the verdict reads `absent` and nothing will ever
@@ -166,7 +176,7 @@ GITHUB_WEBHOOK_SECRET=<same as .env> python3 scripts/send_test_webhook.py
 app/config.py          settings, all environment-backed
 app/models.py          Decision, ReviewResult, and the JSON schema sent to Devin
 app/review_prompt.py   the prompt — the only file where the demo's argument lives
-app/devin.py           create a session, poll for structured output
+app/devin.py           create a session, request a Devin Review, poll both
 app/github.py          signature check, Devin Review verdict, approve/comment/merge
 app/main.py            the webhook endpoint
 scripts/setup_repo.py  everything about repo config that GitHub exposes over REST

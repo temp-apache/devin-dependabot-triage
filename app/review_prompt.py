@@ -76,6 +76,7 @@ Acting on your decision:
 
 Devin Review verdict on this PR: {review_status}
 The pull request was opened at {opened_at}.
+The triage service received the webhook at {received_at}.
 
 If, and only if, ALL of the following hold, approve the pull request with your summary
 as the review body and then merge it:
@@ -84,7 +85,10 @@ as the review body and then merge it:
   - the Devin Review verdict above is "passed"
 
 End the review body with a line reading "Reached <duration> after the pull request
-opened.", measured from the timestamp above to the moment you post it.
+opened, <duration> after this service saw it.", measured from the two timestamps
+above to the moment you post it. The second number is the one that is comparable
+across runs: it excludes however long the pull request sat before anything picked
+it up.
 
 Set "merged_by_devin" to true if you merged, false otherwise.
 
@@ -108,6 +112,7 @@ def build_prompt(
     min_confidence: float,
     review_status: str,
     opened_at: str = "",
+    received_at: str = "",
 ) -> str:
     body = _CORE.format(
         pr_url=pr_url,
@@ -121,6 +126,7 @@ def build_prompt(
         body += _DEVIN_MERGES.format(
             review_status=review_status,
             opened_at=opened_at,
+            received_at=received_at or "unknown",
             approve=Decision.APPROVE_AND_MERGE.value,
             min_confidence=min_confidence,
         )

@@ -105,7 +105,10 @@ class GitHubClient:
 
 
 def render_comment(
-    result: ReviewResult, session_url: str, elapsed: timedelta | None = None
+    result: ReviewResult,
+    session_url: str,
+    elapsed: timedelta | None = None,
+    handled_in: timedelta | None = None,
 ) -> str:
     lines = [f"**{result.decision.value}** (confidence {result.confidence:.2f})", ""]
     lines.append(result.summary)
@@ -114,7 +117,12 @@ def render_comment(
         lines += [f"- {item}" for item in result.evidence]
         lines += ["", "</details>"]
     if elapsed is not None:
-        lines += ["", f"Reached {format_elapsed(elapsed)} after the pull request opened."]
+        timing = f"Reached {format_elapsed(elapsed)} after the pull request opened"
+        if handled_in is not None:
+            timing += f", {format_elapsed(handled_in)} after this service saw it"
+        lines += ["", f"{timing}."]
+    elif handled_in is not None:
+        lines += ["", f"Reached {format_elapsed(handled_in)} after this service saw it."]
     lines += ["", f"[Written by Devin]({session_url})"]
     return "\n".join(lines)
 
@@ -140,9 +148,10 @@ async def apply_decision(
     require_devin_review: bool,
     dry_run: bool,
     elapsed: timedelta | None = None,
+    handled_in: timedelta | None = None,
 ) -> str:
     """Execute a decision. Used when the service, not Devin, owns the merge."""
-    body = render_comment(result, session_url, elapsed)
+    body = render_comment(result, session_url, elapsed, handled_in)
 
     if dry_run:
         logger.info("dry run, would post on #%s:\n%s", pull_number, body)
