@@ -1,0 +1,23 @@
+# Optional real deployment. `fly launch --no-deploy` then `fly deploy`.
+# Set secrets with: fly secrets set GITHUB_TOKEN=... DEVIN_API_KEY=... GITHUB_WEBHOOK_SECRET=...
+app = "devin-dependabot-triage"
+primary_region = "syd"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  TARGET_REPO = "temp-apache/superset"
+  MERGE_ACTOR = "devin"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"

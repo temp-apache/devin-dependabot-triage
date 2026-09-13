@@ -1,0 +1,21 @@
+services:
+  receiver:
+    build: .
+    env_file: .env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Local development only. Holds an outbound connection to smee.io so GitHub can
+  # reach the receiver without a deployment or an inbound port. Omit this service
+  # when running on Fly.io, where the receiver has a real URL.
+  smee:
+    image: deltaprojects/smee-client
+    command: --url ${SMEE_URL} --target http://receiver:8000/github/webhook
+    depends_on:
+      receiver:
+        condition: service_healthy
