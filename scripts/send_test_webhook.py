@@ -18,6 +18,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 
 def main() -> int:
@@ -47,6 +48,7 @@ def main() -> int:
             "number": args.number,
             "title": args.title,
             "html_url": f"https://github.com/{args.repo}/pull/{args.number}",
+            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
     }
     body = json.dumps(payload).encode()

@@ -4,6 +4,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# datetime.UTC needs 3.11; the scripts are meant to run on whatever Python the operator
+# happens to have, and the tests on whatever the contributor has.
+ignore = ["UP017"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

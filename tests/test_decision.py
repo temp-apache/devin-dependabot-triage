@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import httpx
 import pytest
 import respx
 
-from app.github import GitHubClient, apply_decision, render_comment
+from app.github import (
+    GitHubClient,
+    apply_decision,
+    format_elapsed,
+    render_comment,
+)
 from app.models import Decision, ReviewResult
 from app.review_prompt import build_prompt
 
@@ -146,6 +153,19 @@ def test_comment_carries_evidence_and_session_link() -> None:
     assert "decline" in body
     assert "package.json:431" in body
     assert SESSION in body
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [(9, "9s"), (252, "4m 12s"), (7 * 3600, "7h 0m")],
+)
+def test_elapsed_reads_as_a_duration(seconds: int, expected: str) -> None:
+    assert format_elapsed(timedelta(seconds=seconds)) == expected
+
+
+def test_the_comment_states_how_long_the_pr_waited() -> None:
+    body = render_comment(result(Decision.APPROVE_AND_MERGE), SESSION, timedelta(seconds=252))
+    assert "Reached 4m 12s after the pull request opened." in body
 
 
 def test_prompt_tells_devin_to_merge_only_when_gated() -> None:

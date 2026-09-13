@@ -10,13 +10,19 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, Header, Request, Response, status
 
 from app.config import Settings, get_settings
 from app.devin import DevinClient, DevinError
-from app.github import GitHubClient, apply_decision, verify_signature
+from app.github import (
+    GitHubClient,
+    apply_decision,
+    format_elapsed,
+    verify_signature,
+)
 from app.review_prompt import build_prompt
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -91,8 +97,19 @@ async def _triage_guarded(pull_request: dict[str, Any], settings: Settings) -> N
         logger.exception("triage failed for PR #%s", pull_request.get("number"))
 
 
+def _opened_at(pull_request: dict[str, Any]) -> datetime | None:
+    raw = pull_request.get("created_at")
+    if not isinstance(raw, str):
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
     number = pull_request["number"]
+    opened_at = _opened_at(pull_request)
     devin: DevinClient = app.state.devin
     github: GitHubClient = app.state.github
 
@@ -113,6 +130,7 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
         merge_actor=merge_actor,
         min_confidence=settings.min_confidence,
         review_status=review_status,
+        opened_at=opened_at.isoformat() if opened_at else "unknown",
     )
 
     session = await devin.create_session(
@@ -137,13 +155,16 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
             )
         return
 
+    elapsed = datetime.now(timezone.utc) - opened_at if opened_at is not None else None
+
     if merge_actor == "devin":
         logger.info(
-            "PR #%s: %s (confidence %.2f), merged_by_devin=%s",
+            "PR #%s: %s (confidence %.2f), merged_by_devin=%s, %s since it opened",
             number,
             result.decision.value,
             result.confidence,
             result.merged_by_devin,
+            format_elapsed(elapsed) if elapsed else "unknown time",
         )
         if result.merged_by_devin and not await github.is_merged(number):
             logger.warning("PR #%s reported merged but is still open", number)
@@ -157,5 +178,12 @@ async def triage(pull_request: dict[str, Any], settings: Settings) -> None:
         min_confidence=settings.min_confidence,
         require_devin_review=settings.require_devin_review,
         dry_run=settings.dry_run,
+        elapsed=elapsed,
     )
-    logger.info("PR #%s: %s -> %s", number, result.decision.value, outcome)
+    logger.info(
+        "PR #%s: %s -> %s in %s",
+        number,
+        result.decision.value,
+        outcome,
+        format_elapsed(elapsed) if elapsed else "unknown time",
+    )

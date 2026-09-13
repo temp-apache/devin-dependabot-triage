@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+from datetime import timedelta
 
 import httpx
 
@@ -103,15 +104,30 @@ class GitHubClient:
         return bool(response.json().get("merged"))
 
 
-def render_comment(result: ReviewResult, session_url: str) -> str:
+def render_comment(
+    result: ReviewResult, session_url: str, elapsed: timedelta | None = None
+) -> str:
     lines = [f"**{result.decision.value}** (confidence {result.confidence:.2f})", ""]
     lines.append(result.summary)
     if result.evidence:
         lines += ["", "<details><summary>Evidence</summary>", ""]
         lines += [f"- {item}" for item in result.evidence]
         lines += ["", "</details>"]
+    if elapsed is not None:
+        lines += ["", f"Reached {format_elapsed(elapsed)} after the pull request opened."]
     lines += ["", f"[Written by Devin]({session_url})"]
     return "\n".join(lines)
+
+
+def format_elapsed(elapsed: timedelta) -> str:
+    seconds = max(int(elapsed.total_seconds()), 0)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
 
 
 async def apply_decision(
@@ -123,9 +139,10 @@ async def apply_decision(
     min_confidence: float,
     require_devin_review: bool,
     dry_run: bool,
+    elapsed: timedelta | None = None,
 ) -> str:
     """Execute a decision. Used when the service, not Devin, owns the merge."""
-    body = render_comment(result, session_url)
+    body = render_comment(result, session_url, elapsed)
 
     if dry_run:
         logger.info("dry run, would post on #%s:\n%s", pull_number, body)

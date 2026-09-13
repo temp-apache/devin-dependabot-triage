@@ -75,12 +75,16 @@ _DEVIN_MERGES = """\
 Acting on your decision:
 
 Devin Review verdict on this PR: {review_status}
+The pull request was opened at {opened_at}.
 
 If, and only if, ALL of the following hold, approve the pull request with your summary
 as the review body and then merge it:
   - your decision is "{approve}"
   - your confidence is at least {min_confidence}
   - the Devin Review verdict above is "passed"
+
+End the review body with a line reading "Reached <duration> after the pull request
+opened.", measured from the timestamp above to the moment you post it.
 
 Set "merged_by_devin" to true if you merged, false otherwise.
 
@@ -103,6 +107,7 @@ def build_prompt(
     merge_actor: str,
     min_confidence: float,
     review_status: str,
+    opened_at: str = "",
 ) -> str:
     body = _CORE.format(
         pr_url=pr_url,
@@ -115,6 +120,7 @@ def build_prompt(
     if merge_actor == "devin":
         body += _DEVIN_MERGES.format(
             review_status=review_status,
+            opened_at=opened_at,
             approve=Decision.APPROVE_AND_MERGE.value,
             min_confidence=min_confidence,
         )
