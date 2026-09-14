@@ -43,7 +43,8 @@ handler.
 this a redelivery means two reviews and possibly two merges.
 
 **The merge gate is three conditions, all required:** decision is `approve_and_merge`,
-confidence at or above `MIN_CONFIDENCE`, Devin Review verdict is `passed`. It is
+confidence at or above `MIN_CONFIDENCE`, and — unless `REQUIRE_DEVIN_REVIEW=false` —
+the Devin Review verdict is `passed`. It is
 expressed twice on purpose — in the prompt for `MERGE_ACTOR=devin`, in
 `apply_decision` for `MERGE_ACTOR=service`. Change one, change the other, and update
 `tests/test_decision.py`.
@@ -66,9 +67,11 @@ the interesting assertion is usually that `merge` was *not* called.
 
 - Dependabot **version updates** on a fork cannot be enabled through the API. There is no
   endpoint. `scripts/setup_repo.py` does the other four and prints the manual step.
-- Superset's `.github/dependabot.yml` points `pip` at `/`, which never reads
-  `requirements/development.txt`. Without a `/requirements` entry the `pytest` PR never
-  opens.
+- A `pip` entry pointed at `/requirements` fails on Superset: the files there contain
+  `-e .` path dependencies that do not resolve from that directory. Keep pip at `/`.
+- Requesting a Devin Review over the API (`/v3/.../pr-reviews`) returns `403` on keys
+  without that permission. With `REQUIRE_DEVIN_REVIEW=true` that fails closed: correct,
+  but nothing merges.
 - Devin Review only runs in repositories connected to the Devin organisation. In an
   unconnected repository the verdict is `absent` and, with the default settings, nothing
   ever merges. That is correct behaviour, not a bug.

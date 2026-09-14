@@ -34,10 +34,16 @@ Settings → Webhooks → Add webhook (content type `application/json`, the same
 
 Actions off matters: Superset runs 55 workflows per pull request otherwise.
 
-## 4. Connect the fork to your Devin organisation
+## 4. Decide on the Devin Review gate
 
-Devin Review is connected per repository and a re-fork is a new repository. Without it
-every verdict reads `absent` and the merge gate holds everything.
+Devin Review is connected per repository and a re-fork is a new repository. With
+`REQUIRE_DEVIN_REVIEW=true` and no connection (or an API key the review endpoint
+refuses with `403`) every verdict reads `absent` and nothing merges. For an unattended
+merge set `REQUIRE_DEVIN_REVIEW=false`, `DRY_RUN=false`, `ESCALATION_CHANNEL=#engineering`
+and rebuild — `docker compose exec receiver printenv REQUIRE_DEVIN_REVIEW` to confirm the
+container actually loaded it.
+
+Leave **Dependabot security updates** off: they open PRs outside the curated config.
 
 ## 5. Enable Dependabot version updates
 
@@ -59,11 +65,14 @@ Dependabot → **Check for updates** on the entry you want.
 
 ```
 POST /github/webhook 202 Accepted
-no Devin Review on #1, requesting one
-Devin Review on https://github.com/... is completed
 PR #1 -> session https://app.devin.ai/sessions/...
 PR #1: decline (confidence 0.95), merged_by_devin=False, 2m 11s since it opened, 2m 4s since the webhook arrived
 ```
 
 The second duration is the one to read out: it excludes however long the pull request
-sat before anything picked it up.
+sat before anything picked it up. `204` on a delivery means the receiver ignored it —
+wrong action, author or repo.
+
+## Re-running one pull request
+
+Close → Reopen. A `reopened` event is triaged like `opened`, with the clock restarted.

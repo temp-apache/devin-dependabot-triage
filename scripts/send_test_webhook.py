@@ -26,10 +26,11 @@ def main() -> int:
     parser.add_argument("--url", default="http://localhost:8000/github/webhook")
     parser.add_argument("--repo", default="temp-apache/superset")
     parser.add_argument("--number", type=int, default=1)
-    parser.add_argument("--sender", default="dependabot[bot]")
+    parser.add_argument("--author", default="dependabot[bot]", help="pull request author")
+    parser.add_argument("--action", default="opened", choices=["opened", "reopened"])
     parser.add_argument(
         "--title",
-        default="chore(deps): bump js-yaml from 4.3.1 to 4.3.2 in /superset-frontend",
+        default="chore(deps): bump react-window from 2.3.0 to 2.3.1 in /superset-frontend",
     )
     args = parser.parse_args()
 
@@ -41,10 +42,11 @@ def main() -> int:
         return 1
 
     payload = {
-        "action": "opened",
-        "sender": {"login": args.sender},
+        "action": args.action,
+        "sender": {"login": args.author},
         "repository": {"full_name": args.repo},
         "pull_request": {
+            "user": {"login": args.author},
             "number": args.number,
             "title": args.title,
             "html_url": f"https://github.com/{args.repo}/pull/{args.number}",
